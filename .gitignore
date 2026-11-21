@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Environments
+venv/
+env/
+.env
+
+# Generated batch runs (preserve output directory structure, ignore bulk data)
+output/ensemble_*
+output/*.npz
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# Private assignment materials and raw notes
+Материалы для работы/
+*Материалы*
+*.jpg
+*.png
+*.txt
+!requirements.txt

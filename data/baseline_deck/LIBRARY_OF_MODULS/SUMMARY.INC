@@ -1,0 +1,174 @@
+WOPR
+ G1
+ G2
+ G3
+ G4
+ P1:01
+ P1:02
+ P3
+ P4
+ P5
+ P6 /
+
+WWPR
+ G1
+ G2
+ G3
+ G4
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+
+WGPR
+ G1
+ G2
+ G3
+ G4
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WWCT
+ G1
+ G2
+ G3
+ G4
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+
+WGOR
+ G1
+ G2
+ G3
+ G4
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+
+WWIR
+ D1
+ D2
+ D3 /
+
+WBHP
+ G1
+ G2
+ G3
+ G4
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6
+ D1
+ D2
+ D3 /
+
+WOPT
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WWPT
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WLPT
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WWPT
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WOPTH
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WWPTH
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WLPTH
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+WWPTH
+ P1:01
+ P1:02
+ P2
+ P3
+ P4
+ P5
+ P6 /
+FOPT
+FOPTH
+FWPT
+FWPTH
+FLPT
+FLPTH
+FGPT
+FGPTH
+-- Field Pressure
+
+FPR
+FOPT
+FOPTH
+FWPT
+FWPTH
+FGPT
+FGPTH
+FWIT
+FWITH
+
+RPTONLY
+
+RUNSUM
+SEPARATE
+RPTSMRY
+ 0 /

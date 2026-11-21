@@ -1,0 +1,99 @@
+---------------------------- Runspec Section -----------------------------------
+NOECHO
+RUNSPEC
+TITLE
+ EX1 - FIRST TUTORIAL FOR SCHEDULE
+DIMENS
+-- NX   NY   NZ
+   15   15    6  /
+-- Phases present
+OIL
+WATER
+GAS
+DISGAS
+-- Units
+МETRIC
+-- Table dimension
+TABDIMS
+-- NoSatTabl     MaxNodesSatTab  MaxFIPReg      MaxSatEndpointsDepthTab
+--       NoPVTTab       MaxPressNodes    MaxRsRvNodes
+  1  1  20   20       1      20       1    /
+-- Well dimension
+WELLDIMS
+-- MaxNo  MaxPerf  MaxGroup MaxWell/Group
+    20      20      15       15  /
+START
+  1 'JAN' 1970 /
+-- Defining aquifer dimensions for all aquifers
+AQUDIMS
+-- MaxNoLines MaxNoConntect MaxNoInflu   MaxNoRows  NoAnalyt  NoBlocksConnect
+-- NumAquifer LinesNumAquif TablesCarter InflTable  Acquifers Aquifer
+-- MXNAQN     NXNAQC        NIFTBL       NRIFTB     NANAQU    NCAMAX
+     3            3            1         1           1         150 /
+-- Formated output of files
+--FMTOUT
+-- Unified output at the end of the simulation run
+UNIFOUT
+------------------------------- Grid Section -----------------------------------
+GRID
+-- Including the Grid file
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_COORD.inc'/
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_ZCORN.inc'/
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_PERMX.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_PERMY.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_PERMZ.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_PORO.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\EX1_NTG.INC'/
+-- Output of an Eclipse Grid file (extented output)
+GRIDFILE
+ 2 /
+INIT
+NEWTRAN
+------------------------------- Edit Section -----------------------------------
+------------------------------ Properties Section ------------------------------
+PROPS
+INCLUDE
+'LIBRARY_OF_MODULS\PVDG.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\PVTW.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\PVTO.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\DENSITY.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\ROCK.INC'/
+INCLUDE
+'LIBRARY_OF_MODULS\OFP.INC'/
+------------------------------- Regions Section --------------------------------
+------------------------------ Solution Section --------------------------------
+SOLUTION
+-- Equilibrium data
+INCLUDE
+'LIBRARY_OF_MODULS\EQUIL.INC'/
+-- Defining an analytical aquifer
+INCLUDE
+'LIBRARY_OF_MODULS\AQUIFER.INC'/
+------------------------------ Summary Section --------------------------------
+SUMMARY
+INCLUDE
+'LIBRARY_OF_MODULS\SUMMARY.INC'/
+DATE
+--LOTUS
+EXCEL
+------------------------------ Schedule Section --------------------------------
+SCHEDULE
+RPTRST
+BASIC=1 /
+RPTSCHED
+FIP=1/
+INCLUDE
+'LIBRARY_OF_MODULS\SCHEDULE.SCH' /
+END
+

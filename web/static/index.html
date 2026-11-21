@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPM-Synth Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <!-- Header -->
+  <header class="px-4 py-2.5 flex items-center justify-between shrink-0 border-b" style="background: var(--surface); border-color: var(--border);">
+    <div class="flex items-center gap-3">
+      <div class="w-6 h-6 rounded flex items-center justify-center font-mono text-xs font-medium border" style="background: var(--surface-panel); border-color: var(--border); color: var(--text-primary);">
+        OS
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="font-semibold" style="color: var(--text-primary);">OPM-Synth Studio</span>
+        <span style="color: var(--text-muted);">/</span>
+        <span class="font-mono" style="color: var(--text-secondary);">EX1 Model Deck</span>
+      </div>
+    </div>
+
+    <!-- Right Controls: Status, Theme Toggle & ZIP Export -->
+    <div class="flex items-center gap-3 text-xs">
+      <div class="hidden sm:flex items-center gap-2 font-mono" style="color: var(--text-muted);">
+        <span>Сетка <strong style="color: var(--text-primary);" id="dimens-text">15×15×6</strong></span>
+        <span>•</span>
+        <span>Симулятор <strong style="color: var(--text-primary);" id="opm-status-text">Прокси 3D</strong></span>
+      </div>
+
+      <!-- Theme Switcher Button -->
+      <button id="btn-toggle-theme" class="px-2.5 py-1.5 rounded border text-xs font-medium transition-colors" style="background: var(--btn-secondary-bg); border-color: var(--btn-secondary-border); color: var(--btn-secondary-text);">
+        <span id="theme-btn-label">Светлая тема</span>
+      </button>
+
+      <button id="btn-export-zip-top" class="px-3 py-1.5 rounded border font-medium transition-colors flex items-center gap-1.5" style="background: var(--btn-secondary-bg); border-color: var(--btn-secondary-border); color: var(--btn-secondary-text);">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        <span>Экспорт ZIP</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace Container -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Left Sidebar: Parameters & Inspector -->
+    <aside class="w-72 p-3.5 flex flex-col gap-3.5 overflow-y-auto shrink-0 custom-scrollbar border-r" style="background: var(--surface); border-color: var(--border);">
+      
+      <!-- Preset -->
+      <div>
+        <label for="preset-selector" class="block text-[11px] font-medium mb-1" style="color: var(--text-secondary);">Пресет коллектора</label>
+        <select id="preset-selector" class="w-full rounded px-2 py-1.5 text-xs focus:outline-none border" style="background: var(--input-bg); border-color: var(--border); color: var(--text-primary);">
+          <option value="balanced" selected>Сбалансированный пласт</option>
+          <option value="layering">Слоистый с анизотропией</option>
+          <option value="channels">Русловый коллектор</option>
+          <option value="high_hetero">Высокая неоднородность</option>
+        </select>
+      </div>
+
+      <!-- Parameters Box -->
+      <div class="rounded border p-3 flex flex-col gap-3" style="background: var(--surface-panel); border-color: var(--border);">
+        <div class="text-[11px] font-semibold" style="color: var(--text-primary);">Геостатистика пласта</div>
+
+        <!-- N models -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span style="color: var(--text-secondary);">Число моделей</span>
+            <span class="font-mono font-medium" style="color: var(--text-primary);" id="val-n-models">5</span>
+          </div>
+          <input type="range" id="param-n-models" min="1" max="50" value="5" class="w-full">
+        </div>
+
+        <!-- Lateral Rx -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span style="color: var(--text-secondary);">Радиус корреляции XY</span>
+            <span class="font-mono font-medium" style="color: var(--text-primary);" id="val-rx">4.0 ячеек</span>
+          </div>
+          <input type="range" id="param-rx" min="1.0" max="10.0" step="0.5" value="4.0" class="w-full">
+        </div>
+
+        <!-- Vertical Rz -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span style="color: var(--text-secondary);">Связность по вертикали Z</span>
+            <span class="font-mono font-medium" style="color: var(--text-primary);" id="val-rz">2.5 слоев</span>
+          </div>
+          <input type="range" id="param-rz" min="0.5" max="6.0" step="0.5" value="2.5" class="w-full">
+        </div>
+
+        <!-- Perturbation scale -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span style="color: var(--text-secondary);">Дисперсия возмущения</span>
+            <span class="font-mono font-medium" style="color: var(--text-primary);" id="val-perturb">25%</span>
+          </div>
+          <input type="range" id="param-perturb" min="0.05" max="0.60" step="0.05" value="0.25" class="w-full">
+        </div>
+
+        <!-- Correlation Phi - K -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span style="color: var(--text-secondary);">Связь пористости и проницаемости</span>
+            <span class="font-mono font-medium" style="color: var(--text-primary);" id="val-corr">0.90</span>
+          </div>
+          <input type="range" id="param-corr" min="0.50" max="0.99" step="0.02" value="0.90" class="w-full">
+        </div>
+
+        <!-- Anisotropy Kz/Kh -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span style="color: var(--text-secondary);">Анизотропия Kz/Kh</span>
+            <span class="font-mono font-medium" style="color: var(--text-primary);" id="val-aniso">0.20</span>
+          </div>
+          <input type="range" id="param-aniso" min="0.01" max="0.60" step="0.02" value="0.20" class="w-full">
+        </div>
+
+        <!-- Solver toggle -->
+        <div>
+          <label for="sim-engine" class="block text-[11px] mb-1" style="color: var(--text-secondary);">Гидродинамика</label>
+          <select id="sim-engine" class="w-full rounded px-2 py-1 text-xs focus:outline-none border" style="background: var(--input-bg); border-color: var(--border); color: var(--text-primary);">
+            <option value="proxy" selected>3D прокси-решатель</option>
+            <option value="opm">Внешний OPM Flow</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div class="flex flex-col gap-2">
+        <button id="btn-generate" class="w-full py-2 px-3 rounded font-medium text-xs tracking-tight transition-colors border" style="background: var(--btn-primary-bg); color: var(--btn-primary-text); border-color: var(--btn-primary-bg);">
+          Сгенерировать ансамбль
+        </button>
+
+        <div id="progress-container" class="hidden rounded p-2 border flex flex-col gap-1" style="background: var(--surface-panel); border-color: var(--border);">
+          <div class="flex justify-between text-[11px] font-mono" style="color: var(--text-secondary);">
+            <span id="progress-msg">Расчет</span>
+            <span id="progress-pct" style="color: var(--text-primary);">0%</span>
+          </div>
+          <div class="w-full rounded-full h-1 overflow-hidden" style="background: var(--border);">
+            <div id="progress-bar" class="h-1 transition-[width] duration-150" style="background: var(--text-primary); width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Ensemble Selector -->
+      <div>
+        <label for="ensemble-selector" class="block text-[11px] font-medium mb-1" style="color: var(--text-secondary);">Активный ансамбль</label>
+        <select id="ensemble-selector" class="w-full rounded px-2.5 py-1.5 text-xs focus:outline-none border font-mono" style="background: var(--input-bg); border-color: var(--border); color: var(--text-primary);">
+          <option value="">Загрузка</option>
+        </select>
+      </div>
+
+    </aside>
+
+    <!-- Main Content Canvas -->
+    <main class="flex-1 flex flex-col overflow-hidden" style="background: var(--background);">
+      
+      <!-- Subnavigation Toolbar: Segmented Controls -->
+      <div class="px-4 py-2 flex items-center justify-between shrink-0 border-b" style="background: var(--surface); border-color: var(--border);">
+        
+        <!-- Segmented Tab Switcher -->
+        <div class="inline-flex p-0.5 rounded-md gap-0.5 text-xs border" style="background: var(--tab-bg); border-color: var(--border);">
+          <button data-tab="tab-files" class="tab-btn segmented-tab active px-3 py-1 font-medium">
+            Текстовые файлы (.DATA / .INC)
+          </button>
+          <button data-tab="tab-reservoir" class="tab-btn segmented-tab px-3 py-1 font-medium">
+            2D Срезы
+          </button>
+          <button data-tab="tab-3d" class="tab-btn segmented-tab px-3 py-1 font-medium">
+            3D Сетка
+          </button>
+          <button data-tab="tab-qc" class="tab-btn segmented-tab px-3 py-1 font-medium">
+            Контроль качества
+          </button>
+          <button data-tab="tab-flow" class="tab-btn segmented-tab px-3 py-1 font-medium">
+            Добыча
+          </button>
+        </div>
+
+        <!-- Global Selectors: Model, Property, Layer -->
+        <div class="flex items-center gap-2.5 text-xs">
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded border" style="background: var(--surface-panel); border-color: var(--border);">
+            <span style="color: var(--text-muted);">Модель:</span>
+            <select id="active-model-select" class="bg-transparent font-mono font-medium focus:outline-none cursor-pointer" style="color: var(--text-primary);">
+              <option value="SYNTH_001">SYNTH_001</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded border" style="background: var(--surface-panel); border-color: var(--border);">
+            <span style="color: var(--text-muted);">Свойство:</span>
+            <select id="active-property" class="bg-transparent font-mono font-medium focus:outline-none cursor-pointer" style="color: var(--text-primary);">
+              <option value="PORO" selected>PORO</option>
+              <option value="PERMX">PERMX</option>
+              <option value="PERMY">PERMY</option>
+              <option value="PERMZ">PERMZ</option>
+              <option value="NTG">NTG</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-2 px-2.5 py-1 rounded border" style="background: var(--surface-panel); border-color: var(--border);">
+            <span style="color: var(--text-muted);">Слой:</span>
+            <input type="range" id="active-layer" min="1" max="6" value="1" class="w-16 cursor-pointer">
+            <span id="active-layer-text" class="font-mono font-medium" style="color: var(--text-primary);">1 / 6</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB: TEXT FILES & CODE INSPECTOR -->
+      <div id="tab-files" class="tab-content flex-1 flex overflow-hidden">
+        
+        <!-- File Tree Sidebar -->
+        <div class="w-64 flex flex-col shrink-0 border-r" style="background: var(--surface); border-color: var(--border);">
+          <div class="px-3.5 py-2.5 border-b flex items-center justify-between" style="border-color: var(--border);">
+            <span class="text-xs font-medium" style="color: var(--text-primary);">Файлы модели</span>
+            <span class="text-[10px] font-mono" style="color: var(--text-muted);" id="file-count-badge">0 файлов</span>
+          </div>
+
+          <!-- File list -->
+          <div id="file-tree-container" class="flex-1 overflow-y-auto p-1.5 flex flex-col gap-0.5 custom-scrollbar font-mono text-xs">
+            <div class="p-3 text-xs" style="color: var(--text-muted);">Загрузка файлов...</div>
+          </div>
+
+          <!-- Download Action in Sidebar -->
+          <div class="p-2 border-t" style="border-color: var(--border);">
+            <button id="btn-download-active-model-zip" class="w-full py-1.5 px-2.5 rounded border text-xs font-medium transition-colors flex items-center justify-center gap-1.5" style="background: var(--btn-secondary-bg); border-color: var(--btn-secondary-border); color: var(--btn-secondary-text);">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>Скачать модель (.ZIP)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Code View Pane -->
+        <div class="flex-1 flex flex-col overflow-hidden" style="background: var(--code-bg);">
+          
+          <!-- Code File Topbar -->
+          <div class="h-10 px-4 flex items-center justify-between shrink-0 border-b" style="background: var(--surface); border-color: var(--border);">
+            <div class="flex items-center gap-2 font-mono text-xs">
+              <span class="font-semibold" style="color: var(--text-primary);" id="active-filename">SYNTH_001.DATA</span>
+              <span style="color: var(--text-muted);">|</span>
+              <span style="color: var(--text-secondary);" id="active-file-stats">- строк · - KB</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button id="btn-copy-code" class="px-2.5 py-1 rounded border text-xs font-medium transition-colors flex items-center gap-1" style="background: var(--btn-secondary-bg); border-color: var(--btn-secondary-border); color: var(--btn-secondary-text);">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                <span id="copy-btn-text">Копировать</span>
+              </button>
+
+              <button id="btn-download-single-file" class="px-2.5 py-1 rounded border text-xs font-medium transition-colors flex items-center gap-1" style="background: var(--btn-secondary-bg); border-color: var(--btn-secondary-border); color: var(--btn-secondary-text);">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                <span>Скачать файл</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Code Content with Line Numbers -->
+          <div class="flex-1 overflow-auto p-4 custom-scrollbar font-mono text-xs flex" style="background: var(--code-bg);">
+            <div id="code-line-numbers" class="code-line-number pr-3 select-none text-right"></div>
+            <pre class="flex-1 overflow-x-auto"><code id="code-content" style="color: var(--code-text);">Загрузка содержимого файла...</code></pre>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- TAB: 2D RESERVOIR SLICES -->
+      <div id="tab-reservoir" class="tab-content hidden flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Base Model -->
+          <div class="rounded border p-3 flex flex-col" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-medium" style="color: var(--text-primary);">Исходная модель (EX1)</span>
+              <span class="text-xs font-mono" style="color: var(--text-muted);" id="base-stats-label">min: - | max: -</span>
+            </div>
+            <div id="plot-base-heatmap" class="w-full h-80 rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+          </div>
+
+          <!-- Synthetic Model -->
+          <div class="rounded border p-3 flex flex-col" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-medium" style="color: var(--text-primary);">Синтетическая модель</span>
+              <span class="text-xs font-mono" style="color: var(--text-muted);" id="synth-stats-label">min: - | max: -</span>
+            </div>
+            <div id="plot-synth-heatmap" class="w-full h-80 rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: 3D GRID MESH -->
+      <div id="tab-3d" class="tab-content hidden flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        <div class="rounded border p-3 flex flex-col" style="background: var(--surface-panel); border-color: var(--border);">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-medium" style="color: var(--text-primary);">3D Структура пласта</span>
+          </div>
+          <div id="plot-3d-reservoir" class="w-full h-[520px] rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+        </div>
+      </div>
+
+      <!-- TAB: QC & VARIOGRAMS -->
+      <div id="tab-qc" class="tab-content hidden flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        <div class="grid grid-cols-4 gap-3">
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-[11px]" style="color: var(--text-muted);">QC Оценка</div>
+            <div class="text-xl font-semibold font-mono mt-1" style="color: var(--text-primary);" id="qc-score-val">100 / 100</div>
+          </div>
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-[11px]" style="color: var(--text-muted);">Связность по Z</div>
+            <div class="text-xl font-semibold font-mono mt-1" style="color: var(--text-primary);" id="qc-z-val">Норма</div>
+          </div>
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-[11px]" style="color: var(--text-muted);">Корреляция пористости и проницаемости</div>
+            <div class="text-xl font-semibold font-mono mt-1" style="color: var(--text-primary);" id="qc-petro-val">0.91</div>
+          </div>
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-[11px]" style="color: var(--text-muted);">Анизотропия Kz/Kh</div>
+            <div class="text-xl font-semibold font-mono mt-1" style="color: var(--text-primary);" id="qc-aniso-val">0.20</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-xs font-medium mb-2" style="color: var(--text-primary);">3D Вариограммы</div>
+            <div id="plot-variogram" class="w-full h-80 rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+          </div>
+
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-xs font-medium mb-2" style="color: var(--text-primary);">Кросс-плот пористости и проницаемости</div>
+            <div id="plot-crossplot" class="w-full h-80 rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: PRODUCTION CURVES -->
+      <div id="tab-flow" class="tab-content hidden flex-1 p-4 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-xs font-medium mb-2" style="color: var(--text-primary);">Дебит нефти месторождения (FOPR)</div>
+            <div id="plot-fopr" class="w-full h-80 rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+          </div>
+
+          <div class="rounded border p-3" style="background: var(--surface-panel); border-color: var(--border);">
+            <div class="text-xs font-medium mb-2" style="color: var(--text-primary);">Обводненность (FWCT)</div>
+            <div id="plot-fwct" class="w-full h-80 rounded border" style="background: var(--surface); border-color: var(--border);"></div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
