@@ -24,9 +24,12 @@ Thumbs.db
 *.log
 
 # Private assignment materials and raw notes
+screenshots/
 Материалы для работы/
 *Материалы*
 *.jpg
 *.png
+*.mp4
+*.gif
 *.txt
 !requirements.txt

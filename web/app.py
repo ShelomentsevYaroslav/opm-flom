@@ -18,10 +18,12 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import numpy as np
+import pandas as pd
 
 from engine.deck_io import DeckParser
 from engine.geostats import GeostatisticalEngine
 from engine.opm_runner import OpmFlowRunner
+from engine.proxy_flow import ReservoirProxySimulator
 from engine.validator import ReservoirValidator
 from generator import SyntheticDataGenerator
 
@@ -142,6 +144,108 @@ def get_base_3d(property_name: str = "PORO"):
     }
 
 
+@app.get("/api/model-3d")
+def get_model_3d(ensemble_id: str, model_id: str, property_name: str = "PORO"):
+    """Returns 3D flat grid points (X, Y, Z, Value) for a generated synthetic model."""
+    prop = property_name.upper()
+    inc_map = {
+        "PORO": "EX1_PORO.inc",
+        "PERMX": "EX1_PERMX.inc",
+        "PERMY": "EX1_PERMY.inc",
+        "PERMZ": "EX1_PERMZ.inc",
+        "NTG": "EX1_NTG.inc",
+    }
+    inc_file = inc_map.get(prop)
+    if not inc_file:
+        raise HTTPException(status_code=404, detail=f"Property {prop} not supported")
+
+    target_path = BASE_DIR / "output" / ensemble_id / model_id / "LIBRARY_OF_MODULS" / inc_file
+    if not target_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Model file not found: {target_path}")
+
+    nx, ny, nz = generator_instance.base_model["dimens"] if generator_instance else (15, 15, 6)
+    _, arr = DeckParser.parse_include_array(target_path, expected_size=nx * ny * nz)
+    arr_3d = arr.reshape((nz, ny, nx))
+    z_coords, y_coords, x_coords = np.meshgrid(np.arange(nz), np.arange(ny), np.arange(nx), indexing="ij")
+
+    return {
+        "property": prop,
+        "model_id": model_id,
+        "nx": nx, "ny": ny, "nz": nz,
+        "x": x_coords.flatten().tolist(),
+        "y": y_coords.flatten().tolist(),
+        "z": z_coords.flatten().tolist(),
+        "values": [round(float(v), 4) for v in arr_3d.flatten()]
+    }
+
+
+_baseline_flow_cache: Optional[Dict] = None
+
+
+def _get_baseline_flow() -> Dict:
+    """Computes and caches baseline proxy flow curves once."""
+    global _baseline_flow_cache
+    if _baseline_flow_cache is not None:
+        return _baseline_flow_cache
+    if not generator_instance:
+        return {"time_days": [], "FOPR": [], "FWCT": []}
+
+    props = generator_instance.base_model["properties"]
+    dimens = generator_instance.base_model["dimens"]
+    sim = ReservoirProxySimulator(dimens=dimens)
+    res = sim.simulate(props["PORO"], props["PERMX"], props["PERMY"], props["PERMZ"])
+    _baseline_flow_cache = {
+        "time_days": res["time_days"],
+        "FOPR": res["field"]["FOPR"],
+        "FWCT": res["field"]["FWCT"],
+    }
+    return _baseline_flow_cache
+
+
+@app.get("/api/flow-curves")
+def get_flow_curves(ensemble_id: str, model_id: str):
+    """Returns real production curves (FOPR, FWCT) for baseline, selected model, and ensemble."""
+    base = _get_baseline_flow()
+    csv_path = BASE_DIR / "output" / ensemble_id / "summary_production_curves.csv"
+    if not csv_path.is_file():
+        return {
+            "has_data": False,
+            "time_days": base["time_days"],
+            "base": {"FOPR": base["FOPR"], "FWCT": base["FWCT"]},
+            "selected": None,
+            "ensemble": {}
+        }
+
+    df = pd.read_csv(csv_path)
+    ensemble_curves = {}
+    for mid, grp in df.groupby("model_id"):
+        grp_sorted = grp.sort_values("time_days")
+        ensemble_curves[str(mid)] = {
+            "time_days": grp_sorted["time_days"].tolist(),
+            "FOPR": [round(float(v), 2) for v in grp_sorted["fopr"].tolist()],
+            "FWCT": [round(float(v), 4) for v in grp_sorted["fwct"].tolist()],
+        }
+
+    selected = ensemble_curves.get(model_id)
+    if selected is None and ensemble_curves:
+        first_key = next(iter(ensemble_curves))
+        selected = ensemble_curves[first_key]
+
+    return {
+        "has_data": selected is not None,
+        "model_id": model_id,
+        "time_days": selected["time_days"] if selected else base["time_days"],
+        "base": {"FOPR": base["FOPR"], "FWCT": base["FWCT"]},
+        "selected": selected,
+        "ensemble": ensemble_curves
+    }
+
+
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
+
+
 @app.get("/api/ensembles")
 def list_ensembles():
     """Lists generated ensembles in output/ directory."""
@@ -224,22 +328,44 @@ def get_qc_diagnostic(ensemble_id: Optional[str] = None, model_id: Optional[str]
 
     synth_p = None
     synth_k = None
+    synth_kz = None
     g_z_synth = []
     g_x_synth = []
+    summary_metrics = None
 
     if ensemble_id and model_id:
         lib = BASE_DIR / "output" / ensemble_id / model_id / "LIBRARY_OF_MODULS"
         dimens = generator_instance.base_model["dimens"]
         nx, ny, nz = dimens
         if (lib / "EX1_PORO.inc").is_file():
-            _, arr_p = DeckParser.parse_include_array(lib / "EX1_PORO.inc")
+            _, arr_p = DeckParser.parse_include_array(lib / "EX1_PORO.inc", expected_size=nx * ny * nz)
             synth_p = arr_p.reshape((nz, ny, nx))
             _, g_z_synth = GeostatisticalEngine.compute_experimental_variogram(synth_p, "z")
             _, g_x_synth = GeostatisticalEngine.compute_experimental_variogram(synth_p, "x")
 
         if (lib / "EX1_PERMX.inc").is_file():
-            _, arr_k = DeckParser.parse_include_array(lib / "EX1_PERMX.inc")
+            _, arr_k = DeckParser.parse_include_array(lib / "EX1_PERMX.inc", expected_size=nx * ny * nz)
             synth_k = arr_k.reshape((nz, ny, nx))
+
+        if (lib / "EX1_PERMZ.inc").is_file():
+            _, arr_kz = DeckParser.parse_include_array(lib / "EX1_PERMZ.inc", expected_size=nx * ny * nz)
+            synth_kz = arr_kz.reshape((nz, ny, nx))
+
+        if synth_p is not None and synth_k is not None:
+            props_to_check = {"PORO": synth_p, "PERMX": synth_k}
+            if synth_kz is not None:
+                props_to_check["PERMZ"] = synth_kz
+            qc_res = ReservoirValidator.validate_property_set(props_to_check, generator_instance.base_model["properties"])
+            m = qc_res.get("metrics", {})
+            v = m.get("variogram", {})
+            summary_metrics = {
+                "score": qc_res.get("score", 100),
+                "status": qc_res.get("status", "PASS"),
+                "vertical_continuity": v.get("vertical_continuity", "PRESERVED"),
+                "z_lag1_ratio": v.get("z_lag1_ratio", 0.0),
+                "petro_corr_r": m.get("petro_corr_r", 0.0),
+                "anisotropy_kz_kx": m.get("anisotropy_kz_kx", 0.0)
+            }
 
     sample_stride = 4
     base_scatter = {
@@ -262,7 +388,8 @@ def get_qc_diagnostic(ensemble_id: Optional[str] = None, model_id: Optional[str]
         "variogram_z_synth": [round(float(v), 5) for v in g_z_synth] if len(g_z_synth) else [],
         "variogram_x_synth": [round(float(v), 5) for v in g_x_synth] if len(g_x_synth) else [],
         "base_scatter": base_scatter,
-        "synth_scatter": synth_scatter
+        "synth_scatter": synth_scatter,
+        "summary_metrics": summary_metrics
     }
 
 
@@ -372,6 +499,8 @@ def export_ensemble_zip(ensemble_id: str, model_id: Optional[str] = None):
         raise HTTPException(status_code=404, detail="Ensemble not found")
 
     target_path = ens_dir / model_id if model_id else ens_dir
+    if not target_path.is_dir():
+        raise HTTPException(status_code=404, detail="Target model or ensemble directory not found")
     archive_name = f"{model_id or ensemble_id}.zip"
 
     buf = io.BytesIO()
@@ -434,6 +563,7 @@ def _run_batch_task(req: GenerateRequest):
             run_simulation=req.run_simulation,
             sim_engine=req.sim_engine,
             base_seed=req.base_seed,
+            output_dir=BASE_DIR / "output" / f"ensemble_{__import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')}",
             progress_callback=progress
         )
         generation_status["last_result"] = res

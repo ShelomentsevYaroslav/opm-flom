@@ -106,8 +106,10 @@ function initUIEventListeners() {
   // Property selector
   document.getElementById("active-property").addEventListener("change", e => {
     STATE.activeProperty = e.target.value;
-    if (STATE.activeTab === "tab-reservoir" || STATE.activeTab === "tab-3d") {
+    if (STATE.activeTab === "tab-reservoir") {
       renderReservoirViews();
+    } else if (STATE.activeTab === "tab-3d") {
+      render3DMesh();
     }
   });
 
@@ -299,12 +301,20 @@ async function loadModelFilesList() {
       return;
     }
 
+    const prevPath = STATE.activeFileRelPath;
+    let initialIdx = 0;
+    if (prevPath) {
+      const foundIdx = files.findIndex(f => f.rel_path === prevPath);
+      if (foundIdx >= 0) initialIdx = foundIdx;
+    }
+
     files.forEach((file, idx) => {
+      const isSelected = idx === initialIdx;
       const row = document.createElement("div");
       row.className = "flex items-center justify-between px-2.5 py-1.5 rounded cursor-pointer transition-colors hover:opacity-80 " +
-                      (idx === 0 ? "font-semibold" : "");
-      row.style.background = idx === 0 ? "var(--surface-hover)" : "transparent";
-      row.style.color = idx === 0 ? "var(--text-primary)" : "var(--text-secondary)";
+                      (isSelected ? "font-semibold" : "");
+      row.style.background = isSelected ? "var(--surface-hover)" : "transparent";
+      row.style.color = isSelected ? "var(--text-primary)" : "var(--text-secondary)";
       
       const sizeKb = (file.size_bytes / 1024).toFixed(1);
       
@@ -322,7 +332,7 @@ async function loadModelFilesList() {
       `;
 
       row.addEventListener("click", () => {
-        container.querySelectorAll("div").forEach(d => {
+        Array.from(container.children).forEach(d => {
           d.style.background = "transparent";
           d.style.color = "var(--text-secondary)";
           d.classList.remove("font-semibold");
@@ -337,7 +347,7 @@ async function loadModelFilesList() {
       container.appendChild(row);
     });
 
-    STATE.activeFileRelPath = files[0].rel_path;
+    STATE.activeFileRelPath = files[initialIdx].rel_path;
     await loadFileContent();
   } catch (err) {
     console.error("Error loading model files list:", err);
@@ -356,7 +366,7 @@ async function loadFileContent() {
     const sizeKb = (data.size_bytes / 1024).toFixed(1);
     document.getElementById("active-file-stats").innerText = `${data.line_count} строк · ${sizeKb} KB`;
 
-    const lineNumbers = Array.from({ length: Math.min(data.line_count, 1000) }, (_, i) => i + 1).join("\n");
+    const lineNumbers = Array.from({ length: data.line_count }, (_, i) => i + 1).join("\n");
     document.getElementById("code-line-numbers").innerText = lineNumbers;
     document.getElementById("code-content").innerText = data.content;
   } catch (err) {
@@ -436,7 +446,10 @@ async function renderSynthHeatmap() {
 
 async function render3DMesh() {
   try {
-    const res = await fetch(`/api/base-3d?property_name=${STATE.activeProperty}`);
+    const url = (STATE.activeEnsemble && STATE.activeModel)
+      ? `/api/model-3d?ensemble_id=${encodeURIComponent(STATE.activeEnsemble)}&model_id=${encodeURIComponent(STATE.activeModel)}&property_name=${STATE.activeProperty}`
+      : `/api/base-3d?property_name=${STATE.activeProperty}`;
+    const res = await fetch(url);
     const data = await res.json();
 
     const plotData = [{
@@ -477,6 +490,15 @@ async function renderQcDiagnostic() {
     const url = `/api/qc-diagnostic?ensemble_id=${STATE.activeEnsemble || ""}&model_id=${STATE.activeModel || ""}`;
     const res = await fetch(url);
     const data = await res.json();
+
+    if (data.summary_metrics) {
+      const m = data.summary_metrics;
+      document.getElementById("qc-score-val").innerText = `${m.score} / 100`;
+      document.getElementById("qc-z-val").innerText =
+        m.vertical_continuity === "PRESERVED" ? `Норма (${m.z_lag1_ratio})` : `Слабая (${m.z_lag1_ratio})`;
+      document.getElementById("qc-petro-val").innerText = m.petro_corr_r !== undefined ? m.petro_corr_r.toFixed(2) : "-";
+      document.getElementById("qc-aniso-val").innerText = m.anisotropy_kz_kx !== undefined ? m.anisotropy_kz_kx.toFixed(2) : "-";
+    }
 
     const dark = isDarkMode();
     const varData = [
@@ -550,42 +572,76 @@ async function renderQcDiagnostic() {
 async function renderFlowCurves() {
   if (!STATE.activeEnsemble) return;
   try {
-    const timeDays = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 450, 540, 630, 720];
+    const res = await fetch(
+      `/api/flow-curves?ensemble_id=${encodeURIComponent(STATE.activeEnsemble)}&model_id=${encodeURIComponent(STATE.activeModel || "")}`
+    );
+    const data = await res.json();
     const dark = isDarkMode();
+    const timeDays = data.time_days || [];
 
-    const foprData = [
-      {
+    const foprData = [];
+    const fwctData = [];
+
+    // Faint background curves for all ensemble realizations to illustrate variability
+    if (data.ensemble) {
+      Object.entries(data.ensemble).forEach(([mid, curves]) => {
+        if (mid === STATE.activeModel) return;
+        foprData.push({
+          x: curves.time_days,
+          y: curves.FOPR,
+          name: mid,
+          showlegend: false,
+          mode: "lines",
+          hoverinfo: "skip",
+          line: { color: dark ? "rgba(161,161,170,0.18)" : "rgba(100,116,139,0.22)", width: 1 }
+        });
+        fwctData.push({
+          x: curves.time_days,
+          y: curves.FWCT,
+          name: mid,
+          showlegend: false,
+          mode: "lines",
+          hoverinfo: "skip",
+          line: { color: dark ? "rgba(56,189,248,0.18)" : "rgba(2,132,199,0.22)", width: 1 }
+        });
+      });
+    }
+
+    // Baseline curve
+    if (data.base && data.base.FOPR && data.base.FOPR.length > 0) {
+      foprData.push({
         x: timeDays,
-        y: [360, 355, 348, 340, 332, 325, 318, 310, 298, 285, 270, 255, 240, 220, 205, 190],
+        y: data.base.FOPR,
         name: "Базовая (EX1)",
         mode: "lines",
-        line: { color: dark ? "#52525b" : "#94a3b8", width: 1.5, dash: "dot" }
-      },
-      {
+        line: { color: dark ? "#71717a" : "#64748b", width: 1.5, dash: "dot" }
+      });
+      fwctData.push({
         x: timeDays,
-        y: [375, 368, 358, 345, 335, 322, 312, 300, 288, 272, 258, 245, 230, 212, 198, 185],
-        name: STATE.activeModel,
-        mode: "lines",
-        line: { color: dark ? "#f4f4f5" : "#0f172a", width: 2 }
-      }
-    ];
-
-    const fwctData = [
-      {
-        x: timeDays,
-        y: [0.05, 0.08, 0.12, 0.18, 0.25, 0.32, 0.40, 0.46, 0.52, 0.58, 0.63, 0.68, 0.73, 0.77, 0.81, 0.84],
+        y: data.base.FWCT,
         name: "Базовая (EX1)",
         mode: "lines",
-        line: { color: dark ? "#52525b" : "#94a3b8", width: 1.5, dash: "dot" }
-      },
-      {
-        x: timeDays,
-        y: [0.04, 0.07, 0.11, 0.16, 0.22, 0.29, 0.37, 0.44, 0.50, 0.56, 0.62, 0.67, 0.72, 0.76, 0.80, 0.83],
+        line: { color: dark ? "#71717a" : "#64748b", width: 1.5, dash: "dot" }
+      });
+    }
+
+    // Selected synthetic realization curve
+    if (data.selected) {
+      foprData.push({
+        x: data.selected.time_days,
+        y: data.selected.FOPR,
         name: STATE.activeModel,
         mode: "lines",
-        line: { color: "#0284c7", width: 2 }
-      }
-    ];
+        line: { color: dark ? "#f4f4f5" : "#0f172a", width: 2.2 }
+      });
+      fwctData.push({
+        x: data.selected.time_days,
+        y: data.selected.FWCT,
+        name: STATE.activeModel,
+        mode: "lines",
+        line: { color: "#0284c7", width: 2.2 }
+      });
+    }
 
     const foprLayout = {
       ...getPlotTheme(),
@@ -655,10 +711,19 @@ async function startBatchGeneration() {
           clearInterval(timer);
           btn.disabled = false;
           btn.classList.remove("opacity-50");
-          progressMsg.innerText = "Готово";
-          await loadEnsemblesList();
-          if (STATE.activeTab === "tab-files") loadModelFilesList();
-          if (STATE.activeTab === "tab-reservoir") renderReservoirViews();
+          if (status.message && status.message.startsWith("Error:")) {
+            progressMsg.innerText = status.message;
+            progressMsg.classList.add("text-red-500");
+          } else {
+            await loadEnsemblesList();
+            if (STATE.activeTab === "tab-files") loadModelFilesList();
+            if (STATE.activeTab === "tab-reservoir") renderReservoirViews();
+            if (STATE.activeTab === "tab-3d") render3DMesh();
+            if (STATE.activeTab === "tab-qc") renderQcDiagnostic();
+            if (STATE.activeTab === "tab-flow") renderFlowCurves();
+            progressMsg.innerText = "Готово";
+            progressMsg.classList.remove("text-red-500");
+          }
         }
       } catch (e) {
         clearInterval(timer);

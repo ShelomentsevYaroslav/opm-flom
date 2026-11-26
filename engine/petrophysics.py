@@ -103,9 +103,11 @@ class PetrophysicsEngine:
         # Deterministic component
         mean_log_k = slope * synthetic_poro + intercept
 
-        # Correlated stochastic residual
-        # Higher corr_factor -> lower residual scatter
-        scatter_std = base_std * np.sqrt(max(0.01, 1.0 - corr_factor ** 2))
+        # Match the exact requested Pearson correlation R between PORO and log10(PERMX):
+        # R = signal_std / sqrt(signal_std^2 + scatter_std^2)
+        signal_std = max(1e-4, float(np.std(mean_log_k)))
+        r_clamped = float(np.clip(corr_factor, 0.10, 0.999))
+        scatter_std = signal_std * np.sqrt(1.0 - r_clamped ** 2) / r_clamped
         noise_k = np.random.normal(0.0, scatter_std, size=shape)
 
         log_kx = mean_log_k + noise_k

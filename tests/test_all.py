@@ -16,7 +16,9 @@ from generator import SyntheticDataGenerator
 
 class TestDeckIO(unittest.TestCase):
     def test_load_base_model(self):
-        base_path = Path("Материалы для работы/HEAD_OF_MODEL_1.DATA")
+        primary = Path("data/baseline_deck/HEAD_OF_MODEL_1.DATA")
+        fallback = Path("Материалы для работы/HEAD_OF_MODEL_1.DATA")
+        base_path = primary if primary.is_file() else fallback
         self.assertTrue(base_path.is_file())
         model = DeckParser.load_reservoir_model(base_path)
         self.assertEqual(model["dimens"], (15, 15, 6))
@@ -79,6 +81,39 @@ class TestValidator(unittest.TestCase):
         report = ReservoirValidator.validate_property_set(props)
         self.assertEqual(report["status"], "PASS")
         self.assertGreaterEqual(report["score"], 80)
+
+
+class TestEndToEndPhysicsAndAPI(unittest.TestCase):
+    def test_petrophysics_exact_correlation_control(self):
+        poro = GeostatisticalEngine.generate_gaussian_random_field_3d((6, 15, 15), rx=4.0, ry=4.0, rz=2.5, seed=7)
+        poro = np.clip(0.18 + 0.04 * poro, 0.05, 0.35)
+        props = PetrophysicsEngine.cosimulate_properties(poro, corr_factor=0.90, aniso_z=0.20, seed=11)
+        r = np.corrcoef(poro.flatten(), np.log10(props["PERMX"].flatten()))[0, 1]
+        self.assertGreater(r, 0.85)
+        self.assertLess(r, 0.95)
+
+    def test_proxy_flow_distinct_and_physical_water_cut(self):
+        sim = ReservoirProxySimulator(dimens=(15, 15, 6))
+        p1 = np.full((6, 15, 15), 0.16)
+        k1 = np.full((6, 15, 15), 40.0)
+        p2 = np.full((6, 15, 15), 0.24)
+        k2 = np.full((6, 15, 15), 140.0)
+        r1 = sim.simulate(p1, k1, k1 * 0.7, k1 * 0.2)
+        r2 = sim.simulate(p2, k2, k2 * 0.7, k2 * 0.2)
+        self.assertEqual(r1["field"]["FWCT"][0], 0.0)
+        self.assertGreater(r1["field"]["FWCT"][-1], r1["field"]["FWCT"][0])
+        self.assertFalse(np.allclose(r1["field"]["FOPR"], r2["field"]["FOPR"]))
+
+    def test_fastapi_endpoints(self):
+        from fastapi.testclient import TestClient
+        from web.app import app
+
+        client = TestClient(app)
+        self.assertEqual(client.get("/favicon.ico").status_code, 204)
+        sys_resp = client.get("/api/system")
+        self.assertEqual(sys_resp.status_code, 200)
+        self.assertTrue(sys_resp.json()["base_model"]["loaded"])
+        self.assertEqual(client.get("/api/base-3d?property_name=PORO").status_code, 200)
 
 
 if __name__ == "__main__":
